@@ -71,10 +71,11 @@ function kpiSection(mtd) {
     const w = live.weekly, ft = live.firstTouch, f = live.followUps;
     const st = (v, target, dir) => measureStatus(v, target, dir);
     rows = [
-      { area: 'Response time, new leads and missed calls', value: ft.averageMinutes == null ? null : `${ft.averageMinutes} min avg · ${ft.medianMinutes} median`, standard: '≤ 5 business minutes', status: st(ft.averageMinutes, 5, '≤'), src: 'ServiceTitan' },
+      { area: 'Response time, new leads and missed calls', value: ft.averageMinutes == null ? null : `${ft.averageMinutes} min average`, standard: '≤ 5 business minutes', status: st(ft.averageMinutes, 5, '≤'), src: 'ServiceTitan' },
       { area: 'Missed calls still waiting (callers)', value: String(live.missedCalls.counted), standard: '0', status: st(live.missedCalls.counted, 0, '='), src: 'ServiceTitan' },
-      { area: 'Overdue follow-ups, leads and estimates', value: `${f.total} (${f.leads} leads + ${f.estimates} estimates)`, standard: '0', status: st(f.total, 0, '='), src: 'ServiceTitan' },
+      { area: 'Overdue follow-ups, leads and estimates', value: `${f.total} (${f.leads} leads + ${f.estimates} estimates: ${f.estimatesByStage.map((n, i) => `${n} missed day ${live.config.estimateFollowUpStagesDays[i]}`).join(', ')})`, standard: '0', status: st(f.total, 0, '='), src: 'ServiceTitan' },
       { area: 'Estimate conversion', value: w.estimateConversion == null ? null : pct(w.estimateConversion), standard: 'baseline, then improvement', status: st(w.estimateConversion, null, '≥'), src: 'ServiceTitan' },
+      { area: 'Handoff acceptance misses ("Sent to CS", proposed)', value: String(live.handoffs.overdue), standard: '0', status: st(live.handoffs.overdue, 0, '='), src: 'ServiceTitan' },
       { area: 'Accepted, awaiting booking', value: String(w.acceptedAwaitingBooking), standard: '0', status: st(w.acceptedAwaitingBooking, 0, '='), src: 'ServiceTitan' },
       { area: 'Van-rolls without commitment ($0 completed jobs)', value: String(w.vanRolls), standard: '0', status: st(w.vanRolls, 0, '='), src: 'ServiceTitan' },
       clean,
@@ -141,7 +142,7 @@ const views = {
     const sorted = state.days.map((d, i) => ({ d, i })).sort((a, b) => a.d.date.localeCompare(b.d.date));
     return `<h2>Daily clean queues</h2>
       <p class="note">Scored at the 3:30–4:00 sweep. Pick Met or Not met for each of the four points. A day counts only once all four are recorded; an unfinished day is excluded, not scored as zero.</p>
-      ${live ? `<div class="card"><b>ServiceTitan check at ${when(live.pulledAt)}</b> ${tag('ServiceTitan')}<div class="note">Bookings still marked New: <b>${live.bookingQueue.newBookings}</b> (of which web chats: <b>${live.bookingQueue.newWebChats}</b>). Suggested booking-tab point: <b>${live.bookingQueue.newBookings === 0 ? 'Met' : 'Not met'}</b>. The Outlook inbox, automation and handoff points are entered by hand below.</div></div>` : ''}
+      ${live ? `<div class="card"><b>ServiceTitan check at ${when(live.pulledAt)}</b> ${tag('ServiceTitan')}<div class="note">Bookings still marked New: <b>${live.bookingQueue.newBookings}</b> (of which web chats: <b>${live.bookingQueue.newWebChats}</b>). Suggested booking-tab point: <b>${live.bookingQueue.newBookings === 0 ? 'Met' : 'Not met'}</b>. Suggested handoffs point: <b>${live.handoffs.overdue === 0 ? 'Met' : 'Not met'}</b> (${live.handoffs.overdue} "Sent to CS" leads open past their follow-up date; proposed rule). The Outlook inbox and automation points are entered by hand below.</div></div>` : ''}
       <div class="card grid"><div><div class="note">MTD clean-queue %</div><div class="big">${mtd.pct == null ? 'no data yet' : pct(mtd.pct)}</div></div>
         <div><div class="note">Days counted</div><div class="big">${mtd.daysLogged}</div></div></div>
       <div class="card"><table><tr><th>Date</th>${cols.map((c) => `<th>${c}</th>`).join('')}<th>Score</th><th></th></tr>
@@ -213,7 +214,7 @@ views['Print Report'] = function () {
     ${views['Monthly Pool'](true)}
     <div class="pagebreak"></div>
     ${views['Quarterly Scorecard']()}
-    ${live ? `<div class="pagebreak"></div><h2>How the ServiceTitan numbers are defined</h2><div class="card"><p class="note">Pulled ${esc(new Date(live.pulledAt).toLocaleString('en-US'))}. Follow-up window for open estimates: ${live.config.estimateFollowUpDays} days. Missed-call grace period: ${live.config.missedCallGraceMinutes} minutes.</p>${Object.entries(live.definitions).map(([k, v]) => `<p><b>${esc(k)}</b>: ${esc(v)}</p>`).join('')}</div>` : ''}`;
+    ${live ? `<div class="pagebreak"></div><h2>How the ServiceTitan numbers are defined</h2><div class="card"><p class="note">Pulled ${esc(new Date(live.pulledAt).toLocaleString('en-US'))}. Estimate follow-up cadence: day ${live.config.estimateFollowUpStagesDays.join(', ')}; estimates older than ${live.config.estimateFollowUpMaxDays} days are closed out. Missed-call grace period: ${live.config.missedCallGraceMinutes} minutes.</p>${Object.entries(live.definitions).map(([k, v]) => `<p><b>${esc(k)}</b>: ${esc(v)}</p>`).join('')}</div>` : ''}`;
 };
 
 const teamLead = () => state.roster.find((r) => r.teamLead);

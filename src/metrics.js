@@ -11,15 +11,19 @@ export const DEFAULT_CONFIG = Object.freeze({
   missedCallGraceMinutes: 60, // a missed call counts as overdue only after this long without a callback
   estimateJobTypeIds: [ESTIMATE_JOB_TYPE_ID],
   followUpTaskTypeNames: null, // null = every open overdue task counts (not used by the dashboard measure; see overdueFollowUps)
-  // ServiceTitan estimates carry no follow-up due date, so an open estimate is "due" after this many days.
-  // ASSUMPTION, to be set by the Operations Manager.
-  estimateFollowUpDays: 3,
+  // ServiceTitan estimates carry no follow-up due date. Cadence set by Mason: a touch due at day 1, 3 and 7.
+  // A stage is met when the customer got an outbound call after the previous stage boundary; open estimates
+  // older than the max age are treated as closed out, not overdue. (Max age is an ASSUMPTION.)
+  estimateFollowUpStagesDays: [1, 3, 7],
+  estimateFollowUpMaxDays: 30,
+  handoffTagNamePattern: 'sent to cs', // matched case-insensitively against lead tag names (the leading @ is ignored)
 });
 
 export const DEFINITIONS = Object.freeze({
   firstTouch: 'Average business minutes from a new lead or missed inbound call to the first outbound call to that customer. Web-chat touches are not visible in ServiceTitan, so only calls count.',
   missedCalls: 'Distinct callers whose inbound call ServiceTitan marked Abandoned and who are still waiting after the grace period (no outbound call to them, no later connected call from them). Counted: callers ServiceTitan can identify (customer record or known lead number) plus unknown numbers that missed us 2+ times in a day. Unknown single-attempt numbers are shown separately and not counted, because they include spam and wrong numbers.',
-  overdueFollowups: 'Open leads whose follow-up date has passed, plus open estimates older than the follow-up window. ServiceTitan tasks are not used: the overdue task list is stale compliance/prospecting items, not lead or estimate follow-up.',
+  overdueFollowups: 'Open leads whose follow-up date has passed, plus open estimates that missed a follow-up stage. Estimate cadence is day 1, day 3 and day 7 after creation: a stage is missed when it has come due and the customer has had no outbound call since the previous stage boundary. Open estimates older than 30 days are treated as closed out. ServiceTitan tasks are not used: the overdue task list is stale compliance and prospecting items.',
+  handoffMisses: 'PROPOSED: leads tagged "Sent to CS" that are still open past their follow-up date. The Handoffs-clean point suggests Met when there are none.',
   estimateConversion: 'Sold / (Sold + Dismissed) for decisions made in the period (sold date; last-modified date for dismissed). Open estimates are undecided and excluded.',
   acceptedAwaitingBooking: 'Sold estimates with no non-estimate, non-canceled job for that customer created on or after the sale date. ServiceTitan does not link estimates to their work jobs.',
   vanRolls: 'Completed jobs created in the period that carry a $0 total, estimate jobs included. Scheduled jobs are excluded because ServiceTitan job totals stay $0 until invoiced.',
@@ -213,11 +217,40 @@ export function overdueTasks(tasks, now = Date.now(), cfg = DEFAULT_CONFIG, type
 }
 
 // Follow-up: open leads past their follow-up date; open estimates older than the window (no due date exists).
-export function overdueFollowUps(leads, estimates, now = Date.now(), cfg = DEFAULT_CONFIG) {
+export function overdueFollowUps(leads, estimates, now = Date.now(), cfg = DEFAULT_CONFIG, rawCalls = []) {
   const overdueLeads = leads.filter((l) => l.status === 'Open' && l.followUpDate && ms(l.followUpDate) < now).length;
-  const cutoff = now - cfg.estimateFollowUpDays * 864e5;
-  const overdueEstimates = estimates.filter((e) => (e.status?.name ?? e.status) === 'Open' && ms(e.createdOn) < cutoff).length;
-  return { leads: overdueLeads, estimates: overdueEstimates, total: overdueLeads + overdueEstimates };
+  const outboundByCustomer = new Map();
+  for (const c of rawCalls.map(normalizeCall)) {
+    if (c.direction !== 'Outbound' || !c.customerId || !Number.isFinite(c.at)) continue;
+    if (!outboundByCustomer.has(c.customerId)) outboundByCustomer.set(c.customerId, []);
+    outboundByCustomer.get(c.customerId).push(c.at);
+  }
+  const stages = cfg.estimateFollowUpStagesDays;
+  const maxAge = cfg.estimateFollowUpMaxDays * 864e5;
+  let overdueEstimates = 0;
+  const byStage = stages.map(() => 0);
+  for (const e of estimates) {
+    if ((e.status?.name ?? e.status) !== 'Open') continue;
+    const created = ms(e.createdOn);
+    const age = now - created;
+    if (!Number.isFinite(created) || age > maxAge) continue;
+    const calls = outboundByCustomer.get(e.customerId) ?? [];
+    // First stage that has come due and has no outbound call since the previous boundary.
+    const missed = stages.findIndex((days, i) => age >= days * 864e5 && !calls.some((t) => t >= created + (i === 0 ? 0 : stages[i - 1] * 864e5)));
+    if (missed >= 0) { overdueEstimates++; byStage[missed]++; }
+  }
+  return { leads: overdueLeads, estimates: overdueEstimates, estimatesByStage: byStage, total: overdueLeads + overdueEstimates };
+}
+
+// Handoffs ("Sent to CS" tag on a lead): missed when the lead is still open past its follow-up date. PROPOSED definition.
+export function handoffTagIds(tagTypes = [], cfg = DEFAULT_CONFIG) {
+  const pat = cfg.handoffTagNamePattern.toLowerCase();
+  return new Set(tagTypes.filter((t) => String(t.name ?? '').replace(/^@/, '').trim().toLowerCase().includes(pat)).map((t) => t.id));
+}
+
+export function handoffMisses(leads, tagIds, now = Date.now()) {
+  const tagged = leads.filter((l) => l.status === 'Open' && (l.tagTypeIds ?? []).some((id) => tagIds.has(id)));
+  return { open: tagged.length, overdue: tagged.filter((l) => l.followUpDate && ms(l.followUpDate) < now).length };
 }
 
 // Inputs for the monthly pool: net bookings (sold estimates + non-estimate job totals) and revenue.
@@ -254,8 +287,8 @@ export function weeklyValues(data, { from, to }, now = Date.now(), cfg = DEFAULT
   return {
     firstTouch: touch === null ? null : Math.round(touch * 10) / 10,
     missedCalls: calls.unreturnedOverdue,
-    handoffMisses: null, // needs the handoff definition
-    overdueFollowups: overdueFollowUps(data.openLeads ?? data.leads ?? [], data.estimates ?? [], now, cfg).total,
+    handoffMisses: handoffMisses(data.openLeads ?? data.leads ?? [], handoffTagIds(data.tagTypes ?? [], cfg), now).overdue,
+    overdueFollowups: overdueFollowUps(data.openLeads ?? data.leads ?? [], data.estimates ?? [], now, cfg, data.followUpCalls ?? data.calls ?? []).total,
     infoAwaiting: null, // not in ServiceTitan
     estimateTurnaround: null, // "on-standard" duration not yet defined
     estimateConversion: est.conversion,

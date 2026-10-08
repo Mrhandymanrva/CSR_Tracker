@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { businessMinutes, callMeasures, leadTouchMinutes, estimateMeasures, jobMeasures, overdueTasks, overdueFollowUps, monthlyInputs, revenue, bookingQueue, weeklyValues, ESTIMATE_JOB_TYPE_ID } from '../src/metrics.js';
+import { businessMinutes, callMeasures, leadTouchMinutes, estimateMeasures, jobMeasures, overdueTasks, overdueFollowUps, handoffTagIds, handoffMisses, monthlyInputs, revenue, bookingQueue, weeklyValues, ESTIMATE_JOB_TYPE_ID } from '../src/metrics.js';
 
 // October 2026 is EDT (UTC-4). Mon 2026-10-05 09:00 EDT = 13:00Z.
 const t = (day, hhmm) => `2026-10-${String(day).padStart(2, '0')}T${hhmm}:00Z`;
@@ -128,21 +128,53 @@ test('overdue tasks, revenue window, booking queue', () => {
   assert.deepEqual(q, { newBookings: 2, newWebChats: 1 });
 });
 
-test('follow-ups: open leads past due plus open estimates older than the window', () => {
-  const now = ms(t(10, '12:00'));
+test('follow-ups: leads past due; estimates by 1/3/7-day stages judged on outbound calls to the customer', () => {
+  const now = ms(t(20, '12:00'));
   const leads = [
     { status: 'Open', followUpDate: t(8, '12:00') }, // overdue
-    { status: 'Open', followUpDate: t(12, '12:00') }, // future
+    { status: 'Open', followUpDate: t(25, '12:00') }, // future
     { status: 'Dismissed', followUpDate: t(1, '12:00') }, // not open
     { status: 'Open' }, // no date: not counted
   ];
+  const e = (customerId, createdDay, status = 'Open') => ({ customerId, status: { name: status }, createdOn: t(createdDay, '12:00') });
   const estimates = [
-    { status: { name: 'Open' }, createdOn: t(5, '12:00') }, // 5d old: overdue at 3d window
-    { status: { name: 'Open' }, createdOn: t(9, '12:00') }, // 1d old
-    { status: { name: 'Sold' }, createdOn: t(1, '12:00') },
+    e(1, 19, 'Open'), // 1d old, never called: stage day 1 due -> missed day 1
+    e(2, 19), // 1d old but called 3h after creation: stage 1 met
+    e(3, 17), // 3d old, called only on day 0: stage 3 needs a call after day 1 -> missed day 3
+    e(4, 17), // 3d old, called on day 2: met
+    e(5, 13), // 7d old, called day 2 only: stage 7 needs a call after day 3 -> missed day 7
+    e(6, 13), // 7d old, called day 5: all stages met
+    e(7, 19.9), // created ~2.4h ago: nothing due yet
+    e(8, 1), // 19d old, called on day 18: every stage boundary precedes that call, so all stages are met
+    e(9, 1, 'Sold'), // not open
   ];
-  assert.deepEqual(overdueFollowUps(leads, estimates, now), { leads: 1, estimates: 1, total: 2 });
-  assert.equal(overdueFollowUps(leads, estimates, now, { estimateFollowUpDays: 10 }).estimates, 0);
+  estimates[6].createdOn = t(20, '09:36');
+  const out = (customerId, day, hhmm) => ({ leadCall: { direction: 'Outbound', receivedOn: t(day, hhmm), customer: { id: customerId } } });
+  const calls = [out(2, 19, '15:00'), out(3, 17, '13:00'), out(4, 19, '12:00'), out(5, 15, '12:00'), out(6, 18, '12:00'), out(8, 18, '12:00')];
+  const r = overdueFollowUps(leads, estimates, now, undefined, calls);
+  assert.equal(r.leads, 1);
+  assert.equal(r.estimates, 3); // customers 1 (missed day 1), 3 (missed day 3), 5 (missed day 7)
+  assert.deepEqual(r.estimatesByStage, [1, 1, 1]);
+  assert.equal(r.total, 4);
+});
+
+test('estimates older than the max age are closed out, not overdue', () => {
+  const now = ms(t(30, '12:00'));
+  const old = [{ customerId: 1, status: { name: 'Open' }, createdOn: '2026-08-01T12:00:00Z' }];
+  assert.equal(overdueFollowUps([], old, now, undefined, []).estimates, 0);
+});
+
+test('handoffs: open leads with the Sent to CS tag past their follow-up date', () => {
+  const now = ms(t(10, '12:00'));
+  const ids = handoffTagIds([{ id: 1, name: '@Sent to CS' }, { id: 2, name: '@Handoff' }, { id: 3, name: 'Other' }]);
+  assert.deepEqual([...ids], [1]);
+  const leads = [
+    { status: 'Open', tagTypeIds: [1], followUpDate: t(8, '12:00') }, // overdue
+    { status: 'Open', tagTypeIds: [1], followUpDate: t(12, '12:00') }, // open, not yet due
+    { status: 'Dismissed', tagTypeIds: [1], followUpDate: t(1, '12:00') },
+    { status: 'Open', tagTypeIds: [3], followUpDate: t(1, '12:00') },
+  ];
+  assert.deepEqual(handoffMisses(leads, ids, now), { open: 2, overdue: 1 });
 });
 
 test('monthly inputs: bookings = sold estimates + non-estimate job totals; revenue from invoices', () => {
@@ -158,6 +190,6 @@ test('monthly inputs: bookings = sold estimates + non-estimate job totals; reven
 test('weeklyValues leaves undefined measures null instead of guessing', () => {
   const v = weeklyValues({ calls: [], leads: [], estimates: [], jobs: [], tasks: [] }, { from: 0, to: 1 }, ms(t(5, '17:00')));
   assert.equal(v.firstTouch, null); assert.equal(v.estimateConversion, null);
-  assert.equal(v.handoffMisses, null); assert.equal(v.routingAccuracy, null); assert.equal(v.estimateTurnaround, null);
+  assert.equal(v.handoffMisses, 0); assert.equal(v.routingAccuracy, null); assert.equal(v.estimateTurnaround, null);
   assert.equal(v.missedCalls, 0);
 });

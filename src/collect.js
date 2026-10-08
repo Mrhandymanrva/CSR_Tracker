@@ -11,7 +11,7 @@ export async function collect(st, { from, to }, { onProgress = () => {} } = {}) 
   const jobsFrom = new Date(from - 90 * 864e5).toISOString();
   // Open leads can be older than the window; their follow-up date is what matters.
   const leadsFrom = new Date(from - 90 * 864e5).toISOString();
-  const [calls, leads, estimates, jobs, tasks, invoices, bookings, taskLookup, openLeadsAll] = await Promise.all([
+  const [calls, leads, estimates, jobs, tasks, invoices, bookings, taskLookup, openLeadsAll, tagTypes] = await Promise.all([
     step('calls', () => st.getAll(`/telecom/v2/tenant${T}/calls`, { createdOnOrAfter: f, createdBefore: t }, opts)),
     step('leads', () => st.getAll(`/crm/v2/tenant${T}/leads`, { createdOnOrAfter: f, createdBefore: t }, opts)),
     step('estimates', () => st.getAll(`/sales/v2/tenant${T}/estimates`, { createdOnOrAfter: jobsFrom, createdBefore: t }, opts)),
@@ -21,8 +21,9 @@ export async function collect(st, { from, to }, { onProgress = () => {} } = {}) 
     step('bookings', () => st.getAll(`/crm/v2/tenant${T}/bookings`, { createdOnOrAfter: f, createdBefore: t }, opts)),
     st.get(`/taskmanagement/v2/tenant${T}/data`),
     step('leads (90d, for follow-up)', () => st.getAll(`/crm/v2/tenant${T}/leads`, { createdOnOrAfter: leadsFrom, createdBefore: t }, opts)),
+    step('tag types', () => st.getAll(`/settings/v2/tenant${T}/tag-types`, {}, opts)),
   ]);
   const openLeads = openLeadsAll.filter((l) => l.status === 'Open');
   const taskTypeNames = Object.fromEntries((taskLookup.taskTypes ?? []).map((x) => [x.id, x.name]));
-  return { calls, leads, openLeads, estimates, jobs, tasks, invoices, bookings, taskTypeNames };
+  return { calls, leads, openLeads, estimates, jobs, tasks, invoices, bookings, taskTypeNames, tagTypes };
 }

@@ -14,7 +14,7 @@ console.log('weekly values:', JSON.stringify(weeklyValues(data, { from, to }, to
 console.log('missed calls:', JSON.stringify(missedCallDetail(data, to)));
 console.log('estimates:', JSON.stringify(estimateMeasures(data.estimates, data.jobs, { from, to })));
 console.log('jobs:', JSON.stringify(jobMeasures(data.jobs, { from, to })));
-console.log('follow-ups:', JSON.stringify(overdueFollowUps(data.openLeads, data.estimates, to)));
+console.log('follow-ups:', JSON.stringify(overdueFollowUps(data.openLeads, data.estimates, to, undefined, data.calls)));
 console.log('month-style inputs for this window:', JSON.stringify(monthlyInputs(data, { from, to })));
 console.log('revenue:', Math.round(revenue(data.invoices, { from, to })));
 console.log('booking queue now:', JSON.stringify(bookingQueue(data.bookings, to)));
