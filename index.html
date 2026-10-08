@@ -34,6 +34,7 @@
   .src { font-size:11px; color:var(--mute); border:1px solid var(--line); border-radius:4px; padding:1px 6px; margin-left:4px; white-space:nowrap; font-weight:400; }
   .livebar { display:flex; align-items:center; gap:10px; margin:4px 0 8px; } .neg { color:var(--bad); font-size:13px; }
   .unident { background:var(--pendbg); border-radius:8px; padding:6px 10px; } .unident .big, .unident .note { color:var(--pend); }
+  .syncbar { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:8px; min-height:22px; margin-top:6px; }
   .print-head { display:none; }
   @media print {
     :root { --bg:#fff; --card:#fff; --ink:#000; --mute:#444; --line:#bbb; --input:#fff; }
@@ -50,6 +51,7 @@
 <header>
   <h1>Customer Operations Pod Dashboard</h1>
   <div class="sub" id="period"></div>
+  <div id="syncbar" class="syncbar noprint"></div>
   <nav id="nav"></nav>
 </header>
 <main id="main"></main>

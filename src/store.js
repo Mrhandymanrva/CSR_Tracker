@@ -23,6 +23,31 @@ export function defaultState() {
   };
 }
 
+// ---- shared state, held by the server (see src/stateStore.js) -----------------
+const JSON_HEADERS = { 'Content-Type': 'application/json', 'X-Requested-With': 'pod-dashboard' };
+
+export async function fetchState() {
+  const res = await fetch('/api/state', { cache: 'no-store' });
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
+  return res.json(); // { rev, state, updatedAt, updatedBy, persistent }
+}
+
+// Resolves { ok: true, data } on success or { conflict: true, current } when someone else saved first.
+export async function pushState(baseRev, state, editor) {
+  const res = await fetch('/api/state', { method: 'PUT', headers: JSON_HEADERS, body: JSON.stringify({ baseRev, state, editor }) });
+  const body = await res.json().catch(() => ({}));
+  if (res.status === 409) return { conflict: true, current: body.current };
+  if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+  return { ok: true, data: body };
+}
+
+// Merge a saved state over the defaults so older saves keep working as fields are added.
+export function withDefaults(saved) {
+  const d = defaultState();
+  return { ...d, ...saved, pool: { ...d.pool, ...saved?.pool }, scorecard: { ...d.scorecard, ...saved?.scorecard } };
+}
+
+// Legacy per-browser storage, kept only so a browser's old local data can be read once if ever needed.
 export function load(storage = globalThis.localStorage) {
   try {
     const raw = storage?.getItem(KEY);

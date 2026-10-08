@@ -44,4 +44,4 @@ Set these variables on the service (never commit them):
 | `DATA_DIR` | Optional. Point at a mounted Railway volume (for example `/data`) so daily snapshots survive redeploys. |
 
 Railway supplies `PORT`; the server then listens on `0.0.0.0`. `/health` is open for the health check; everything else needs the password.
-Note: dashboard entries (roster, daily clean-queue points, scorecard) are saved in each browser's local storage, not on the server, so they are per person and per browser until a shared store is added.
+Dashboard data (roster, daily clean-queue points, weekly log, pool inputs, scorecard) is shared: it is stored on the server in `DATA_DIR/state.json`, so everyone sees the same data. Saves are versioned (a stale save is rejected, never silently overwritten), browsers refresh every 30 seconds, and every save is recorded in `DATA_DIR/audit.jsonl` with the person's name (the "Your name" box) and the sections changed (`GET /api/audit`). Without a Railway volume on `DATA_DIR`, all of this is lost on each deploy; the app warns when that is the case.

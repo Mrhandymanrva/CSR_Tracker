@@ -1,7 +1,16 @@
 import { cleanQueueMtd, dailyScore, monthlyPool, scorecard, measureStatus, MEASURES, SCORECARD_CATEGORIES, GATE_KEYS } from './calc.js';
-import { load, save, nextWorkday } from './store.js';
+import { defaultState, nextWorkday, fetchState, pushState, withDefaults } from './store.js';
 
-let state = load();
+// Shared data lives on the server. `state` is this browser's working copy; `remote.rev` is the revision it is based on.
+let state = defaultState();
+const remote = { rev: 0, updatedAt: null, updatedBy: null, persistent: true, loaded: false };
+let sync = { text: 'Loading shared data…', kind: 'note' };
+let dirty = false;
+let saving = false;
+let saveTimer = null;
+let pendingRender = false;
+let editor = '';
+try { editor = localStorage.getItem('pod-editor') || ''; } catch { /* storage unavailable: name stays blank */ }
 let tab = 'Dashboard';
 const TABS = ['Dashboard', 'Roster', 'Daily Clean Queues', 'Weekly Measures', 'Monthly Pool', 'Quarterly Scorecard', 'Print Report'];
 
@@ -17,7 +26,74 @@ const isPct = (m) => m.label.includes('(%)');
 const toDisplay = (m, v) => (v == null ? '' : isPct(m) ? +(v * 100).toFixed(2) : v);
 const fromInput = (m, raw) => { const n = num(raw); return n == null ? null : isPct(m) ? n / 100 : n; };
 
-function commit() { save(state); render(); }
+const rel = (iso) => (iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '');
+function setSync(text, kind = 'note') { sync = { text, kind }; renderSyncBar(); }
+
+function commit() { dirty = true; setSync('Saving…'); clearTimeout(saveTimer); saveTimer = setTimeout(flush, 600); render(); }
+
+// Save the working copy. A stale revision means someone else saved first: their version is loaded and this edit is
+// reported as not applied, never silently merged or overwritten.
+async function flush() {
+  if (saving) { saveTimer = setTimeout(flush, 300); return; }
+  if (!dirty) return;
+  saving = true;
+  const sentAt = JSON.stringify(state);
+  try {
+    const r = await pushState(remote.rev, state, editor);
+    if (r.conflict) {
+      applyRemote(r.current);
+      dirty = false;
+      setSync(`Not saved: ${r.current.updatedBy || 'someone'} saved changes first (${rel(r.current.updatedAt)}). Their version is loaded. Please redo your change.`, 'neg');
+      render();
+    } else {
+      Object.assign(remote, { rev: r.data.rev, updatedAt: r.data.updatedAt, updatedBy: r.data.updatedBy });
+      if (JSON.stringify(state) === sentAt) { dirty = false; setSync('', 'note'); } else { saveTimer = setTimeout(flush, 100); }
+    }
+  } catch (e) {
+    setSync(`Could not save (${e.message}). Retrying…`, 'neg');
+    saveTimer = setTimeout(flush, 5000);
+  } finally {
+    saving = false;
+    renderSyncBar();
+  }
+}
+
+function applyRemote(data) {
+  state = withDefaults(data.state);
+  Object.assign(remote, { rev: data.rev, updatedAt: data.updatedAt, updatedBy: data.updatedBy, persistent: data.persistent ?? remote.persistent, loaded: true });
+}
+
+// Pick up other people's changes. Never while this browser has unsaved edits, and never mid-typing.
+async function poll() {
+  if (dirty || saving) return;
+  try {
+    const data = await fetchState();
+    remote.persistent = data.persistent;
+    if (sync.kind === 'neg') setSync('', 'note'); // an old "not saved" notice no longer applies once we are caught up
+    if (data.rev !== remote.rev) {
+      applyRemote(data);
+      if (/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement?.tagName ?? '')) pendingRender = true;
+      else render();
+    } else renderSyncBar();
+  } catch { /* offline: keep working; the next poll retries */ }
+}
+
+function renderSyncBar() {
+  const el = $('#syncbar');
+  if (!el) return;
+  const info = remote.loaded && remote.updatedAt ? `Shared data last saved by ${esc(remote.updatedBy || 'unknown')}, ${rel(remote.updatedAt)}` : '';
+  if (document.activeElement?.id === 'editor-name') { // never rebuild the box someone is typing in
+    const span = el.querySelector('span');
+    if (span) { span.className = sync.kind === 'neg' ? 'neg' : 'note'; span.textContent = sync.text || info.replace(/&amp;/g, '&'); }
+    return;
+  }
+  el.innerHTML = `<span class="${sync.kind === 'neg' ? 'neg' : 'note'}">${esc(sync.text) || info}</span>
+    <label class="note">Your name <input id="editor-name" value="${esc(editor)}" placeholder="for the change log" style="width:150px;min-width:0"></label>
+    ${remote.persistent ? '' : '<div class="warn" style="flex-basis:100%">Server storage is not persistent. Set DATA_DIR to a Railway volume or saved changes will be lost on the next deploy.</div>'}`;
+}
+
+document.addEventListener('focusout', () => { if (pendingRender) { pendingRender = false; setTimeout(() => { if (!/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement?.tagName ?? '')) render(); }, 0); } });
+document.addEventListener('input', (e) => { if (e.target.id === 'editor-name') { editor = e.target.value; try { localStorage.setItem('pod-editor', editor); } catch { /* ignore */ } } });
 
 function input(path, value, type = 'text', extra = '') {
   return `<input type="${type}" data-path="${path}" value="${esc(value ?? '')}" ${extra}>`;
@@ -223,7 +299,8 @@ const scResult = () => scorecard(state.scorecard);
 function render() {
   $('#nav').innerHTML = TABS.map((t) => `<button data-tab="${t}" ${t === tab ? 'aria-current="true"' : ''}>${t}</button>`).join('');
   $('#period').textContent = [state.pool.month, state.scorecard.quarter].filter(Boolean).join(' · ') || 'Set the reporting month on the Monthly Pool tab';
-  $('#main').innerHTML = views[tab]();
+  renderSyncBar();
+  $('#main').innerHTML = remote.loaded ? views[tab]() : '<p class="note">Loading shared data…</p>';
 }
 
 document.addEventListener('click', (e) => {
@@ -261,4 +338,15 @@ document.addEventListener('change', (e) => {
 });
 
 render();
-loadLive();
+(async () => {
+  try {
+    applyRemote(await fetchState());
+    setSync('', 'note');
+  } catch (e) {
+    setSync(`Could not load shared data (${e.message}). Reload to retry; nothing will be saved until it loads.`, 'neg');
+    return;
+  }
+  render();
+  loadLive();
+  setInterval(poll, 30_000);
+})();
