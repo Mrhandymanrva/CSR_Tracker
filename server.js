@@ -29,10 +29,12 @@ const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; ch
 const port = Number(process.env.PORT) || Number(process.argv[2]) || 5174;
 const host = process.env.HOST || (process.env.PORT ? '0.0.0.0' : '127.0.0.1');
 const password = process.env.DASHBOARD_PASSWORD || '';
-if (!isLoopback(host) && !password) {
-  console.error('Refusing to start: this server is listening beyond localhost but DASHBOARD_PASSWORD is not set. Set it in the host environment variables.');
-  process.exit(1);
-}
+// Without a password a hosted server stays up but serves NOTHING private: every page says what to set. (Exiting instead
+// shows only a generic "application failed to respond" on the host, which hides the cause.)
+const setupRequired = !isLoopback(host) && !password;
+if (setupRequired) console.error('SETUP REQUIRED: DASHBOARD_PASSWORD is not set. Serving a setup notice only; no data is exposed. Set DASHBOARD_PASSWORD in the host environment variables.');
+process.on('unhandledRejection', (e) => console.error('Unhandled rejection:', e));
+process.on('uncaughtException', (e) => console.error('Uncaught exception:', e));
 const st = createClient();
 
 let cache = null; // { at, body }
@@ -99,7 +101,11 @@ const json = (res, code, body) => res.writeHead(code, { 'Content-Type': 'applica
 
 createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
-  if (url.pathname === '/health') return json(res, 200, { ok: true, serviceTitanConfigured: st.configured, persistent: !ephemeral });
+  if (url.pathname === '/health') return json(res, 200, { ok: !setupRequired, setupRequired, passwordSet: Boolean(password), serviceTitanConfigured: st.configured, persistent: !ephemeral });
+  if (setupRequired) {
+    return res.writeHead(503, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' })
+      .end('Setup required.\n\nThe server is running, but DASHBOARD_PASSWORD is not set, so it will not serve any data.\nIn Railway: service > Variables > add DASHBOARD_PASSWORD (any password you choose). It redeploys automatically.\nAlso set SERVICETITAN_TENANT_ID, SERVICETITAN_CLIENT_ID, SERVICETITAN_CLIENT_SECRET, SERVICETITAN_APP_KEY, and DATA_DIR=/data with a volume mounted at /data.\n');
+  }
   if (!authorized(req.headers.authorization, password)) {
     return res.writeHead(401, { 'WWW-Authenticate': 'Basic realm="Pod dashboard", charset="UTF-8"', 'Cache-Control': 'no-store' }).end('Password required');
   }
@@ -145,4 +151,7 @@ createServer(async (req, res) => {
   } catch {
     res.writeHead(404).end('Not found');
   }
-}).listen(port, host, () => console.log(`Pod dashboard listening on ${host}:${port}${password ? ' (password required)' : ''}${st.configured ? '' : '  (ServiceTitan NOT configured: set the SERVICETITAN_* variables)'}`));
+}).listen(port, host, () => {
+  console.log(`Pod dashboard listening on ${host}:${port}`);
+  console.log(`Config: password ${password ? 'set' : 'MISSING'} | ServiceTitan ${st.configured ? 'configured' : `MISSING ${st.missing.join(', ')}`} | data dir ${baseDir}${ephemeral ? ' (NOT a volume: data is lost on deploy)' : ''}`);
+});
