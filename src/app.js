@@ -3,7 +3,7 @@ import { load, save, nextWorkday } from './store.js';
 
 let state = load();
 let tab = 'Dashboard';
-const TABS = ['Dashboard', 'Roster', 'Daily Clean Queues', 'Weekly Measures', 'Monthly Pool', 'Quarterly Scorecard'];
+const TABS = ['Dashboard', 'Roster', 'Daily Clean Queues', 'Weekly Measures', 'Monthly Pool', 'Quarterly Scorecard', 'Print Report'];
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -98,7 +98,7 @@ const views = {
       </table><button class="act" id="add-week">Add week</button></div>`;
   },
 
-  'Monthly Pool'() {
+  'Monthly Pool'(printMode = false) {
     const mtd = cleanQueueMtd(state.days);
     const p = poolResult(mtd);
     const f = state.pool;
@@ -106,7 +106,7 @@ const views = {
     return `<h2>Monthly bonus pool</h2>
       <p class="note">Clean queues (50%) + net job bookings excl. estimate jobs (30%) + company revenue goal (20%). Split by eligible scheduled hours.</p>
       <div class="warn">Assumption pending sign-off by the Operations Manager and Owner: bookings and revenue earn in proportion to attainment, capped at 100% of goal.</div>
-      <div class="card grid">${field('Reporting month', 'month', 'text')}${field('Pool total ($)', 'poolTotal')}${field('Net bookings actual ($)', 'bookingsActual')}${field('Net bookings goal ($)', 'bookingsGoal')}${field('Company revenue actual ($)', 'revenueActual')}${field('Company revenue goal ($)', 'revenueGoal')}</div>
+      <div class="card grid" ${printMode ? 'hidden' : ''}>${field('Reporting month', 'month', 'text')}${field('Pool total ($)', 'poolTotal')}${field('Net bookings actual ($)', 'bookingsActual')}${field('Net bookings goal ($)', 'bookingsGoal')}${field('Company revenue actual ($)', 'revenueActual')}${field('Company revenue goal ($)', 'revenueGoal')}</div>
       <div class="card"><table><tr><th>Part</th><th>Share</th><th>Attainment</th><th>$ Earned</th></tr>
         ${[['Clean queues', 'cleanQueue'], ['Net job bookings', 'netBookings'], ['Company revenue goal', 'revenue']].map(([l, k]) => `<tr><td>${l}</td><td>${pct(p.parts[k].share)}</td><td>${pct(p.parts[k].attainment)}</td><td>${usd(p.parts[k].earned)}</td></tr>`).join('')}
         <tr><th colspan="3">Total pool earned</th><th>${usd(p.totalEarned)}</th></tr></table></div>
@@ -131,6 +131,20 @@ const views = {
   },
 };
 
+// Print view: composes the existing views, no new calculations.
+views['Print Report'] = function () {
+  const stamp = new Date().toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'short' });
+  return `<div class="noprint"><h2>Print report</h2>
+    <p class="note">One page set with the KPI tiles, pool payouts and Team Lead scorecard. Use Print and choose "Save as PDF" to keep a copy.</p>
+    <button class="act" id="do-print">Print / Save as PDF</button></div>
+    <div class="print-head"><h1>Customer Operations Pod Report</h1><div class="sub">${esc([state.pool.month, state.scorecard.quarter].filter(Boolean).join(' · '))} — generated ${stamp}</div></div>
+    ${views.Dashboard()}
+    <div class="pagebreak"></div>
+    ${views['Monthly Pool'](true)}
+    <div class="pagebreak"></div>
+    ${views['Quarterly Scorecard']()}`;
+};
+
 const teamLead = () => state.roster.find((r) => r.teamLead);
 const poolResult = (mtd) => monthlyPool({ ...state.pool, cleanQueuePct: mtd.pct, roster: state.roster });
 const scResult = () => scorecard(state.scorecard);
@@ -144,6 +158,7 @@ function render() {
 document.addEventListener('click', (e) => {
   const t = e.target;
   if (t.dataset.tab) { tab = t.dataset.tab; render(); return; }
+  if (t.id === 'do-print') { window.print(); return; }
   if (t.id === 'add-person') { state.roster.push({ name: 'New person', role: 'REP', teamLead: false, hours: 160, attendancePct: 1 }); commit(); }
   if (t.dataset.delRoster != null) { state.roster.splice(+t.dataset.delRoster, 1); commit(); }
   if (t.id === 'add-day') {

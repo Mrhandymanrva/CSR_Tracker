@@ -31,6 +31,16 @@
   button.act { background:var(--accent); color:#fff; border:0; border-radius:6px; padding:7px 12px; cursor:pointer; margin:6px 6px 0 0; }
   button.ghost { background:transparent; color:var(--bad); border:1px solid var(--line); border-radius:6px; padding:4px 8px; cursor:pointer; }
   .warn { background:var(--pendbg); color:var(--pend); padding:8px 10px; border-radius:8px; font-size:13px; margin:8px 0; }
+  .print-head { display:none; }
+  @media print {
+    :root { --bg:#fff; --card:#fff; --ink:#000; --mute:#444; --line:#bbb; --input:#fff; }
+    header nav, header #period, .noprint, button, .warn { display:none !important; }
+    header h1 { display:none; } .print-head { display:block; }
+    body { font-size:12px; } .card { break-inside:avoid; border-color:#bbb; }
+    input, select { border:0; background:transparent; appearance:none; padding:0; }
+    .pagebreak { break-after:page; }
+    .badge { border:1px solid #888; background:#fff !important; color:#000 !important; }
+  }
 </style>
 </head>
 <body>
