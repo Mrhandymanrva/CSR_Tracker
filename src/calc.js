@@ -22,20 +22,31 @@ export function cleanQueueMtd(days) {
 }
 
 // ---- Monthly bonus pool (50/30/20) -----------------------------------------
-// Attainment = MIN(actual/goal, 1); a zero/invalid goal gives 0 (workbook IFERROR).
-// ASSUMPTION (pending Ops Manager + Owner sign-off): linear, capped at 100% for bookings and revenue.
-export function attainment(actual, goal) {
+// Bookings and revenue legs: no pay below PAY_FLOOR of goal, rising in a straight line to full pay at 100%
+// (rule chosen by Mason, Oct 8 2026; replaces the workbook's linear-from-zero assumption).
+// Clean queues keeps its own proportional rule because it already tops out at 100%.
+export const PAY_FLOOR = 0.8;
+
+// Share of goal reached (uncapped ratio); a zero/invalid goal gives 0, as the workbook's IFERROR did.
+export function goalRatio(actual, goal) {
   if (!isNum(actual) || !isNum(goal) || goal === 0) return 0;
-  return Math.min(actual / goal, 1);
+  return actual / goal;
+}
+
+// Pay factor 0..1 for a goal-based leg.
+export function attainment(actual, goal) {
+  const r = goalRatio(actual, goal);
+  if (r < PAY_FLOOR) return 0;
+  return Math.min((r - PAY_FLOOR) / (1 - PAY_FLOOR), 1);
 }
 
 export function monthlyPool({ poolTotal, cleanQueuePct, bookingsActual, bookingsGoal, revenueActual, revenueGoal, roster }) {
   const total = isNum(poolTotal) ? poolTotal : 0;
   const cq = isNum(cleanQueuePct) ? cleanQueuePct : 0;
   const parts = {
-    cleanQueue: { share: POOL_SHARES.cleanQueue, attainment: cq },
-    netBookings: { share: POOL_SHARES.netBookings, attainment: attainment(bookingsActual, bookingsGoal) },
-    revenue: { share: POOL_SHARES.revenue, attainment: attainment(revenueActual, revenueGoal) },
+    cleanQueue: { share: POOL_SHARES.cleanQueue, ratio: cq, attainment: cq },
+    netBookings: { share: POOL_SHARES.netBookings, ratio: goalRatio(bookingsActual, bookingsGoal), attainment: attainment(bookingsActual, bookingsGoal) },
+    revenue: { share: POOL_SHARES.revenue, ratio: goalRatio(revenueActual, revenueGoal), attainment: attainment(revenueActual, revenueGoal) },
   };
   for (const p of Object.values(parts)) p.earned = p.share * p.attainment * total;
   const totalEarned = parts.cleanQueue.earned + parts.netBookings.earned + parts.revenue.earned;

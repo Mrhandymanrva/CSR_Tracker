@@ -175,12 +175,12 @@ const views = {
     const field = (label, key, type = 'number') => `<div><div class="note">${label}</div>${input(`pool.${key}`, f[key], type, type === 'number' ? 'min="0" step="any" data-num' : '')}</div>`;
     return `<h2>Monthly bonus pool</h2>
       <p class="note">Clean queues (50%) + net job bookings excl. estimate jobs (30%) + company revenue goal (20%). Split by eligible scheduled hours.</p>
-      <div class="warn">Assumption pending sign-off by the Operations Manager and Owner: bookings and revenue earn in proportion to attainment, capped at 100% of goal.</div>
+      <p class="note"><b>Pay rule for bookings and revenue:</b> nothing is earned below 80% of goal; pay rises in a straight line from 0% at 80% of goal to full pay at 100% (for example, 90% of goal earns half of that part). Clean queues earn in proportion to the daily score.</p>
       <div class="card grid" ${printMode ? 'hidden' : ''}>${field('Reporting month', 'month', 'text')}${field('Pool total ($)', 'poolTotal')}${useLive ? `<div><div class="note">Net bookings actual ${tag('ServiceTitan')}</div><div class="big">${usd(eff.bookingsActual)}</div><div class="note">sold estimates ${usd(live.month.soldEstimateDollars)} + jobs ${usd(live.month.jobDollars)}</div></div>` : field('Net bookings actual ($)', 'bookingsActual')}${field('Net bookings goal ($)', 'bookingsGoal')}${useLive ? `<div><div class="note">Company revenue actual ${tag('ServiceTitan')}</div><div class="big">${usd(eff.revenueActual)}</div><div class="note">invoices dated this month</div></div>` : field('Company revenue actual ($)', 'revenueActual')}${field('Company revenue goal ($)', 'revenueGoal')}</div>
       <label class="noprint note"><input type="checkbox" data-uselive ${f.useLive === false ? '' : 'checked'} ${live ? '' : 'disabled'}> Use ServiceTitan month-to-date for bookings and revenue (goals and pool total stay manual)</label>
-      <div class="card"><table><tr><th>Part</th><th>Share</th><th>Attainment</th><th>$ Earned</th></tr>
-        ${[['Clean queues', 'cleanQueue'], ['Net job bookings', 'netBookings'], ['Company revenue goal', 'revenue']].map(([l, k]) => `<tr><td>${l}</td><td>${pct(p.parts[k].share)}</td><td>${pct(p.parts[k].attainment)}</td><td>${usd(p.parts[k].earned)}</td></tr>`).join('')}
-        <tr><th colspan="3">Total pool earned</th><th>${usd(p.totalEarned)}</th></tr></table></div>
+      <div class="card"><table><tr><th>Part</th><th>Share</th><th>Result vs goal</th><th>Pay factor</th><th>$ Earned</th></tr>
+        ${[['Clean queues', 'cleanQueue'], ['Net job bookings', 'netBookings'], ['Company revenue goal', 'revenue']].map(([l, k]) => `<tr><td>${l}</td><td>${pct(p.parts[k].share)}</td><td>${pct(p.parts[k].ratio)}</td><td>${pct(p.parts[k].attainment)}</td><td>${usd(p.parts[k].earned)}</td></tr>`).join('')}
+        <tr><th colspan="4">Total pool earned</th><th>${usd(p.totalEarned)}</th></tr></table></div>
       <div class="card"><table><tr><th>Name</th><th>Role</th><th>Eligible hours</th><th>Share</th><th>Payout</th></tr>
         ${p.payouts.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.role)}</td><td>${r.eligibleHours}</td><td>${pct(r.share)}</td><td>${usd(r.payout)}</td></tr>`).join('')}</table></div>`;
   },

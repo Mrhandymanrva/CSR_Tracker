@@ -23,8 +23,10 @@ npm test
 
 ## Manual inputs (by design)
 
-Pool total and goals, roster and attendance, quarterly scorecard scores and gate, the Outlook inbox, automation dashboard and handoff clean-queue points.
+Pool total and goals, roster and attendance, quarterly scorecard scores and gate, the Outlook inbox and automation dashboard clean-queue points (booking-tab and handoff points are suggested from ServiceTitan).
 
 ## Open decisions
 
-Estimate follow-up window (3 days assumed), first-touch target and whether to use mean or median, the net-bookings double-count caveat, the linear attainment curve in the pool (needs Operations Manager and Owner sign-off).
+Decided: estimate follow-up cadence day 1/3/7; first touch judged on the average; pool pay rule for bookings and revenue (nothing below 80% of goal, straight line to full pay at 100%; confirm with the Operations Manager and Owner before payouts rely on it).
+
+Still open: whether the "Sent to CS" handoff rule is right (proposed), whether SMS campaigns should count as estimate follow-up (not visible in ServiceTitan calls), the 30-day cutoff for open estimates (assumed), the net-bookings double-count caveat, the estimate-turnaround standard, and routing accuracy.

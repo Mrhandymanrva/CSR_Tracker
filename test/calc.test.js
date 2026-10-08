@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { dailyScore, cleanQueueMtd, monthlyPool, scorecard, kpiTiles, measureStatus, attainment } from '../src/calc.js';
+import { goalRatio, dailyScore, cleanQueueMtd, monthlyPool, scorecard, kpiTiles, measureStatus, attainment } from '../src/calc.js';
 
 const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-9, `${a} !~ ${b}`);
 const full = [1, 1, 1, 1];
@@ -17,24 +17,32 @@ test('explicit 0 points do count', () => {
   near(dailyScore({ points: [1, 1, 0, 1] }).pct, 0.75);
 });
 
-test('workbook reference: October 2026 snapshot', () => {
+test('October 2026 sample month under the 80% floor rule', () => {
   const days = [full, full, [1, 1, 0, 1], full, full, full].map((points) => ({ points }));
   const mtd = cleanQueueMtd(days);
   near(mtd.pct, 0.9583333333333334);
   const roster = Array.from({ length: 8 }, (_, i) => ({ name: `P${i}`, role: 'REP', hours: 160, attendancePct: 1 }));
   const p = monthlyPool({ poolTotal: 8000, cleanQueuePct: mtd.pct, bookingsActual: 42000, bookingsGoal: 48000, revenueActual: 210000, revenueGoal: 230000, roster });
-  near(p.parts.cleanQueue.earned, 3833.3333333333);
-  near(p.parts.netBookings.earned, 2100);
-  near(p.parts.revenue.earned, 1460.8695652174);
-  near(p.totalEarned, 7394.2028985507);
-  near(p.payouts[0].payout, 924.2753623188);
+  near(p.parts.cleanQueue.earned, 3833.3333333333); // unchanged from the workbook
+  near(p.parts.netBookings.ratio, 0.875);
+  near(p.parts.netBookings.attainment, 0.375); // (87.5% - 80%) / 20%
+  near(p.parts.netBookings.earned, 900);
+  near(p.parts.revenue.earned, 904.3478260870); // (91.30% - 80%) / 20% = 56.52% of $1,600
+  near(p.totalEarned, 5637.6811594203);
+  near(p.payouts[0].payout, 704.7101449275);
   near(p.payouts.reduce((a, r) => a + r.payout, 0), p.totalEarned);
 });
 
-test('attainment caps at 100% and survives bad goals', () => {
+test('goal legs: nothing below 80%, straight line to full at 100%, capped above, safe on bad goals', () => {
+  assert.equal(attainment(79.99, 100), 0);
+  assert.equal(attainment(0, 100), 0);
+  assert.equal(attainment(80, 100), 0); // exactly at the floor earns nothing yet
+  near(attainment(90, 100), 0.5);
+  assert.equal(attainment(100, 100), 1);
   assert.equal(attainment(60000, 48000), 1);
   assert.equal(attainment(1, 0), 0);
   assert.equal(attainment(null, 5), 0);
+  near(goalRatio(42000, 48000), 0.875);
 });
 
 test('attendance adjustment shifts shares; empty roster is safe', () => {
