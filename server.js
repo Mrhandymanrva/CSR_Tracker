@@ -12,11 +12,22 @@ import { fileURLToPath } from 'node:url';
 import { createClient } from './src/stClient.js';
 import { collect } from './src/collect.js';
 import { buildLive } from './src/live.js';
+import { authorized, isLoopback } from './src/auth.js';
 
+// Hosting (e.g. Railway): PORT is provided, so listen on all interfaces. Locally: 127.0.0.1 only.
+// A hosted server shows payout and live business data, so it REFUSES to start without DASHBOARD_PASSWORD.
+//   DASHBOARD_PASSWORD  shared password (any user name) for HTTP Basic auth
+//   DATA_DIR            where snapshots are saved (point at a Railway volume to keep them across deploys)
 const root = fileURLToPath(new URL('.', import.meta.url));
-const dataDir = join(root, '.data', 'snapshots');
+const dataDir = join(process.env.DATA_DIR || join(root, '.data'), 'snapshots');
 const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
-const port = Number(process.argv[2]) || 5174;
+const port = Number(process.env.PORT) || Number(process.argv[2]) || 5174;
+const host = process.env.HOST || (process.env.PORT ? '0.0.0.0' : '127.0.0.1');
+const password = process.env.DASHBOARD_PASSWORD || '';
+if (!isLoopback(host) && !password) {
+  console.error('Refusing to start: this server is listening beyond localhost but DASHBOARD_PASSWORD is not set. Set it in the host environment variables.');
+  process.exit(1);
+}
 const st = createClient();
 
 let cache = null; // { at, body }
@@ -69,6 +80,10 @@ const json = (res, code, body) => res.writeHead(code, { 'Content-Type': 'applica
 
 createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
+  if (url.pathname === '/health') return json(res, 200, { ok: true, serviceTitanConfigured: st.configured });
+  if (!authorized(req.headers.authorization, password)) {
+    return res.writeHead(401, { 'WWW-Authenticate': 'Basic realm="Pod dashboard", charset="UTF-8"', 'Cache-Control': 'no-store' }).end('Password required');
+  }
   try {
     if (url.pathname === '/api/live' && req.method === 'GET') return json(res, 200, await live(url.searchParams.get('refresh') === '1'));
     if (url.pathname === '/api/snapshots' && req.method === 'GET') {
@@ -91,4 +106,4 @@ createServer(async (req, res) => {
   } catch {
     res.writeHead(404).end('Not found');
   }
-}).listen(port, '127.0.0.1', () => console.log(`Pod dashboard on http://127.0.0.1:${port}${st.configured ? '' : '  (ServiceTitan NOT configured: add .env)'}`));
+}).listen(port, host, () => console.log(`Pod dashboard listening on ${host}:${port}${password ? ' (password required)' : ''}${st.configured ? '' : '  (ServiceTitan NOT configured: set the SERVICETITAN_* variables)'}`));

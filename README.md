@@ -30,3 +30,16 @@ Pool total and goals, roster and attendance, quarterly scorecard scores and gate
 Decided: estimate follow-up cadence day 1/3/7; first touch judged on the average; pool pay rule for bookings and revenue (nothing below 80% of goal, straight line to full pay at 100%; confirm with the Operations Manager and Owner before payouts rely on it).
 
 Still open: whether the "Sent to CS" handoff rule is right (proposed), whether SMS campaigns should count as estimate follow-up (not visible in ServiceTitan calls), the 30-day cutoff for open estimates (assumed), the net-bookings double-count caveat, the estimate-turnaround standard, and routing accuracy.
+
+## Hosting (Railway)
+
+Set these variables on the service (never commit them):
+
+| Variable | Purpose |
+|---|---|
+| `DASHBOARD_PASSWORD` | Required when hosted. The server refuses to start without it. Sign in with any user name and this password. |
+| `SERVICETITAN_TENANT_ID`, `SERVICETITAN_CLIENT_ID`, `SERVICETITAN_CLIENT_SECRET`, `SERVICETITAN_APP_KEY` | Read-only ServiceTitan access. |
+| `DATA_DIR` | Optional. Point at a mounted Railway volume (for example `/data`) so daily snapshots survive redeploys. |
+
+Railway supplies `PORT`; the server then listens on `0.0.0.0`. `/health` is open for the health check; everything else needs the password.
+Note: dashboard entries (roster, daily clean-queue points, scorecard) are saved in each browser's local storage, not on the server, so they are per person and per browser until a shared store is added.

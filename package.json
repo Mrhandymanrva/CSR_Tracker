@@ -3,5 +3,6 @@
   "version": "0.1.0",
   "type": "module",
   "private": true,
+  "engines": { "node": ">=20" },
   "scripts": { "test": "node --test \"test/*.test.js\"", "start": "node server.js", "probe": "node scripts/probe.js" }
 }
