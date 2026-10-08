@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pod Dashboard</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --ink:#1c2430; --mute:#667085; --line:#dde1e7; --accent:#1f5fbf;
+          --ok:#127a4b; --okbg:#e2f5ec; --bad:#b42318; --badbg:#fdeceb; --pend:#8a5a00; --pendbg:#fdf3dc; --input:#fff8e1; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#12161c; --card:#1a2029; --ink:#e8ecf2; --mute:#98a2b3; --line:#2b3440;
+          --accent:#6aa3f5; --ok:#5fd39b; --okbg:#143324; --bad:#ff8a80; --badbg:#3a1c1a; --pend:#f2c35b; --pendbg:#3a2f12; --input:#2a2614; } }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.45 system-ui,sans-serif; }
+  header, main { max-width:980px; margin:0 auto; padding:0 16px; }
+  header { padding-top:16px; }
+  h1 { font-size:20px; margin:0 0 2px; } h2 { font-size:16px; margin:20px 0 8px; }
+  .sub, .note { color:var(--mute); font-size:13px; }
+  nav { display:flex; flex-wrap:wrap; gap:6px; margin:12px 0; }
+  nav button { border:1px solid var(--line); background:var(--card); color:var(--ink); padding:7px 12px; border-radius:8px; cursor:pointer; }
+  nav button[aria-current="true"] { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px; margin-bottom:12px; overflow-x:auto; }
+  table { border-collapse:collapse; width:100%; } th, td { padding:6px 8px; border-bottom:1px solid var(--line); text-align:left; vertical-align:middle; }
+  th { font-size:12px; color:var(--mute); font-weight:600; }
+  input, select { font:inherit; color:var(--ink); background:var(--input); border:1px solid var(--line); border-radius:6px; padding:5px 7px; width:100%; min-width:70px; }
+  input[type=checkbox] { width:auto; min-width:0; }
+  .badge { display:inline-block; padding:2px 9px; border-radius:99px; font-size:12px; font-weight:600; white-space:nowrap; }
+  .On-standard { background:var(--okbg); color:var(--ok); } .Below-standard { background:var(--badbg); color:var(--bad); }
+  .baseline-pending, .no-data-yet { background:var(--pendbg); color:var(--pend); }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:10px; }
+  .big { font-size:24px; font-weight:700; } .row { display:flex; justify-content:space-between; gap:12px; padding:4px 0; }
+  button.act { background:var(--accent); color:#fff; border:0; border-radius:6px; padding:7px 12px; cursor:pointer; margin:6px 6px 0 0; }
+  button.ghost { background:transparent; color:var(--bad); border:1px solid var(--line); border-radius:6px; padding:4px 8px; cursor:pointer; }
+  .warn { background:var(--pendbg); color:var(--pend); padding:8px 10px; border-radius:8px; font-size:13px; margin:8px 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Customer Operations Pod Dashboard</h1>
+  <div class="sub" id="period"></div>
+  <nav id="nav"></nav>
+</header>
+<main id="main"></main>
+<script type="module" src="src/app.js"></script>
+</body>
+</html>
