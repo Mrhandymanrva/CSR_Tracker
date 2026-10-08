@@ -3,5 +3,5 @@
   "version": "0.1.0",
   "type": "module",
   "private": true,
-  "scripts": { "test": "node --test \"test/*.test.js\"" }
+  "scripts": { "test": "node --test \"test/*.test.js\"", "probe": "node scripts/probe.js" }
 }
