@@ -1,6 +1,6 @@
 // Builds the single JSON payload the dashboard shows: weekly measures, missed-call breakdown, follow-ups,
 // estimates, month-to-date pool inputs, booking queue. Server-side only (uses the ServiceTitan client).
-import { handoffMisses, handoffTagIds, weeklyValues, missedCallDetail, overdueFollowUps, estimateMeasures, jobMeasures, monthlyInputs, bookingQueue, leadTouchMinutes, callMeasures, knownPhoneSet, DEFINITIONS, DEFAULT_CONFIG } from './metrics.js';
+import { weeklyValues, missedCallDetail, overdueFollowUps, estimateMeasures, jobMeasures, monthlyInputs, bookingQueue, leadTouchMinutes, callMeasures, knownPhoneSet, DEFINITIONS, DEFAULT_CONFIG } from './metrics.js';
 
 const median = (a) => { if (!a.length) return null; const s = [...a].sort((x, y) => x - y); const m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
 const round1 = (v) => (v == null ? null : Math.round(v * 10) / 10);
@@ -30,7 +30,6 @@ export async function buildLive(st, collect, now = Date.now(), cfg = DEFAULT_CON
     firstTouch: { averageMinutes: round1(allTouches.length ? allTouches.reduce((a, b) => a + b, 0) / allTouches.length : null), medianMinutes: round1(median(allTouches)), touched: allTouches.length, leadsInWeek: weekLeads.length },
     missedCalls: missedCallDetail(weekData, now, cfg),
     followUps: overdueFollowUps(data.openLeads, data.estimates, now, cfg, data.calls),
-    handoffs: handoffMisses(data.openLeads, handoffTagIds(data.tagTypes, cfg), now),
     estimates: estimateMeasures(data.estimates, data.jobs, week, cfg),
     jobs: jobMeasures(data.jobs, week, cfg),
     bookingQueue: bookingQueue(data.bookings, now),

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { businessMinutes, callMeasures, leadTouchMinutes, estimateMeasures, jobMeasures, overdueTasks, overdueFollowUps, handoffTagIds, handoffMisses, monthlyInputs, revenue, bookingQueue, weeklyValues, ESTIMATE_JOB_TYPE_ID } from '../src/metrics.js';
+import { businessMinutes, callMeasures, leadTouchMinutes, estimateMeasures, jobMeasures, overdueTasks, overdueFollowUps, monthlyInputs, revenue, bookingQueue, weeklyValues, ESTIMATE_JOB_TYPE_ID } from '../src/metrics.js';
 
 // October 2026 is EDT (UTC-4). Mon 2026-10-05 09:00 EDT = 13:00Z.
 const t = (day, hhmm) => `2026-10-${String(day).padStart(2, '0')}T${hhmm}:00Z`;
@@ -164,18 +164,6 @@ test('estimates older than the max age are closed out, not overdue', () => {
   assert.equal(overdueFollowUps([], old, now, undefined, []).estimates, 0);
 });
 
-test('handoffs: open leads with the Sent to CS tag past their follow-up date', () => {
-  const now = ms(t(10, '12:00'));
-  const ids = handoffTagIds([{ id: 1, name: '@Sent to CS' }, { id: 2, name: '@Handoff' }, { id: 3, name: 'Other' }]);
-  assert.deepEqual([...ids], [1]);
-  const leads = [
-    { status: 'Open', tagTypeIds: [1], followUpDate: t(8, '12:00') }, // overdue
-    { status: 'Open', tagTypeIds: [1], followUpDate: t(12, '12:00') }, // open, not yet due
-    { status: 'Dismissed', tagTypeIds: [1], followUpDate: t(1, '12:00') },
-    { status: 'Open', tagTypeIds: [3], followUpDate: t(1, '12:00') },
-  ];
-  assert.deepEqual(handoffMisses(leads, ids, now), { open: 2, overdue: 1 });
-});
 
 test('monthly inputs: bookings = sold estimates + non-estimate job totals; revenue from invoices', () => {
   const w = { from: ms(t(1, '00:00')), to: ms(t(31, '00:00')) };
@@ -190,6 +178,6 @@ test('monthly inputs: bookings = sold estimates + non-estimate job totals; reven
 test('weeklyValues leaves undefined measures null instead of guessing', () => {
   const v = weeklyValues({ calls: [], leads: [], estimates: [], jobs: [], tasks: [] }, { from: 0, to: 1 }, ms(t(5, '17:00')));
   assert.equal(v.firstTouch, null); assert.equal(v.estimateConversion, null);
-  assert.equal(v.handoffMisses, 0); assert.equal(v.routingAccuracy, null); assert.equal(v.estimateTurnaround, null);
+  assert.equal(v.handoffMisses, null); assert.equal(v.routingAccuracy, null); assert.equal(v.estimateTurnaround, null);
   assert.equal(v.missedCalls, 0);
 });

@@ -55,7 +55,7 @@ async function takeSnapshot() {
   const body = await live(true);
   const date = etDate();
   await mkdir(dataDir, { recursive: true });
-  const snap = { date, takenAt: new Date().toISOString(), weekly: body.weekly, missedCalls: body.missedCalls, followUps: body.followUps, handoffs: body.handoffs, bookingQueue: body.bookingQueue, estimates: body.estimates, month: body.month, definitions: body.definitions };
+  const snap = { date, takenAt: new Date().toISOString(), weekly: body.weekly, missedCalls: body.missedCalls, followUps: body.followUps, bookingQueue: body.bookingQueue, estimates: body.estimates, month: body.month, definitions: body.definitions };
   await writeFile(join(dataDir, `${date}.json`), JSON.stringify(snap, null, 2));
   return snap;
 }

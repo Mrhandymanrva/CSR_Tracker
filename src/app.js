@@ -75,7 +75,6 @@ function kpiSection(mtd) {
       { area: 'Missed calls still waiting (callers)', value: String(live.missedCalls.counted), standard: '0', status: st(live.missedCalls.counted, 0, '='), src: 'ServiceTitan' },
       { area: 'Overdue follow-ups, leads and estimates', value: `${f.total} (${f.leads} leads + ${f.estimates} estimates: ${f.estimatesByStage.map((n, i) => `${n} missed day ${live.config.estimateFollowUpStagesDays[i]}`).join(', ')})`, standard: '0', status: st(f.total, 0, '='), src: 'ServiceTitan' },
       { area: 'Estimate conversion', value: w.estimateConversion == null ? null : pct(w.estimateConversion), standard: 'baseline, then improvement', status: st(w.estimateConversion, null, '≥'), src: 'ServiceTitan' },
-      { area: 'Handoff acceptance misses ("Sent to CS", proposed)', value: String(live.handoffs.overdue), standard: '0', status: st(live.handoffs.overdue, 0, '='), src: 'ServiceTitan' },
       { area: 'Accepted, awaiting booking', value: String(w.acceptedAwaitingBooking), standard: '0', status: st(w.acceptedAwaitingBooking, 0, '='), src: 'ServiceTitan' },
       { area: 'Van-rolls without commitment ($0 completed jobs)', value: String(w.vanRolls), standard: '0', status: st(w.vanRolls, 0, '='), src: 'ServiceTitan' },
       clean,
@@ -142,7 +141,7 @@ const views = {
     const sorted = state.days.map((d, i) => ({ d, i })).sort((a, b) => a.d.date.localeCompare(b.d.date));
     return `<h2>Daily clean queues</h2>
       <p class="note">Scored at the 3:30–4:00 sweep. Pick Met or Not met for each of the four points. A day counts only once all four are recorded; an unfinished day is excluded, not scored as zero.</p>
-      ${live ? `<div class="card"><b>ServiceTitan check at ${when(live.pulledAt)}</b> ${tag('ServiceTitan')}<div class="note">Bookings still marked New: <b>${live.bookingQueue.newBookings}</b> (of which web chats: <b>${live.bookingQueue.newWebChats}</b>). Suggested booking-tab point: <b>${live.bookingQueue.newBookings === 0 ? 'Met' : 'Not met'}</b>. Suggested handoffs point: <b>${live.handoffs.overdue === 0 ? 'Met' : 'Not met'}</b> (${live.handoffs.overdue} "Sent to CS" leads open past their follow-up date; proposed rule). The Outlook inbox and automation points are entered by hand below.</div></div>` : ''}
+      ${live ? `<div class="card"><b>ServiceTitan check at ${when(live.pulledAt)}</b> ${tag('ServiceTitan')}<div class="note">Bookings still marked New: <b>${live.bookingQueue.newBookings}</b> (of which web chats: <b>${live.bookingQueue.newWebChats}</b>). Suggested booking-tab point: <b>${live.bookingQueue.newBookings === 0 ? 'Met' : 'Not met'}</b>. The Outlook inbox, automation and handoffs points are entered by hand below.</div></div>` : ''}
       <div class="card grid"><div><div class="note">MTD clean-queue %</div><div class="big">${mtd.pct == null ? 'no data yet' : pct(mtd.pct)}</div></div>
         <div><div class="note">Days counted</div><div class="big">${mtd.daysLogged}</div></div></div>
       <div class="card"><table><tr><th>Date</th>${cols.map((c) => `<th>${c}</th>`).join('')}<th>Score</th><th></th></tr>
